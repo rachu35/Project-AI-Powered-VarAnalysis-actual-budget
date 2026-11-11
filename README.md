@@ -93,4 +93,7 @@ Power BI's web version has no live MySQL connector, so data moves through CSV ex
 - Month-over-month AI summaries comparing performance to the prior period, not just to budget
 - Automated monthly refresh (currently run manually, department by department)
 
+### Note  
+- All data used in this project is synthetic and was independently designed with AI assistance. No real customer data or confidential business information was used. The project is intended solely for portfolio demonstration purposes.
+
 
