@@ -36,7 +36,7 @@ An end-to-end FP&A project that simulates a monthly budget-vs-actual variance an
 
 ### 4. Key design decisions
 🌱 **GA cost allocation basis: Gross Profit share, not Revenue**  
-Rather than allocating G&A costs by revenue share (the more common default), this project allocates by each department's share of total company gross profit. This better reflects each department's actual contribution to profitability before overhead, rather than just its sales volume — a higher-margin department contributing less revenue but more gross profit carries a fairer share of shared costs.  
+Rather than allocating G&A costs by revenue share (the more common default), this project allocates by each department's share of total company gross profit. This better reflects each department's actual contribution to profitability before overhead, rather than just its sales volume, a higher-margin department contributing less revenue but more gross profit carries a fairer share of shared costs.  
 
 🌱 **Overview page excludes GA allocation; department pages include it**  
 The overview page uses non-allocated actual/budget measures. Department pages use a separate "Incl GA" measure variant. This avoids double-counting: since GA costs are redistributed into department totals, summing department-level "Incl GA" figures would overstate the company total.  
@@ -49,7 +49,7 @@ An early approach that generated budget figures by adding random noise to actual
 ### 5. Problems encountered & how I solved them
 🌱 **SQL**  
 - Date format on import  
-Power BI's web version has no live MySQL connector, so data moves through CSV exports (via SharePoint/OneDrive). The `month` column wasn't included in one export, and in another pass risked being read as text instead of a date, which would have broken date-based filtering in DAX. I confirmed `month` is exported on every pull and verified its type as Date (not text) after import — a text-typed date column would require rewriting DAX filters as string comparisons instead of `DATE()` comparisons.  
+Power BI's web version has no live MySQL connector, so data moves through CSV exports (via SharePoint/OneDrive). The `month` column wasn't included in one export, and in another pass risked being read as text instead of a date, which would have broken date-based filtering in DAX. I confirmed `month` is exported on every pull and verified its type as Date (not text) after import which is a text-typed date column would require rewriting DAX filters as string comparisons instead of `DATE()` comparisons.  
 
 🌱 **Power BI (DAX)**  
 - `display_name` vs. `line_item` filter conflict  
@@ -59,7 +59,7 @@ Power BI's web version has no live MySQL connector, so data moves through CSV ex
   Company-wide totals were inflated because GA costs are allocated into each department's "Incl GA" actuals — summing those company-wide counted GA twice. The Overview page now uses non-GA measures only; GA allocation applies at the department-page level (see Section 3).  
 
 - A silent 100x error  
-  One measure multiplied a decimal by 100 for display ("55.17" instead of "0.5517"), but was then reused as a multiplier elsewhere, silently corrupting downstream calculations. I split it into a pure decimal calculation measure and a separate display-only measure — now a standing rule for the model.  
+  One measure multiplied a decimal by 100 for display ("55.17" instead of "0.5517"), but was then reused as a multiplier elsewhere, silently corrupting downstream calculations. I split it into a pure decimal calculation measure and a separate display-only measure. Now, it is a standing rule for the model.  
 
 - Blank chart from the wrong filter field  
   A pie chart built on `sql_var_detail_v1[account_category_sub]` rendered blank because the measure powering it read filter context via `SELECTEDVALUE()` from the disconnected line-items table, which has no relationship to the raw data table. I built a simpler measure using `CALCULATE(SUM(...))` directly on the raw table, so filter context flows naturally.  
@@ -67,14 +67,14 @@ Power BI's web version has no live MySQL connector, so data moves through CSV ex
   
 🌱 **Langflow / LLM**  
 - Correct-looking but fabricated Operating Profit figures, the big bug in the project  
-  The AI summary for Beauty stated it "exceeded its operating profit budget by $1,018,000 (135%)" — a number that matched nothing in the data (the real figure was $358,122 / 163.5%).  
+  The AI summary for Beauty stated it "exceeded its operating profit budget by $1,018,000 (135%)". It is a number that matched nothing in the data (the real figure was $358,122 / 163.5%).  
 
 - Two causes:  
   - The SQL query only passed rows with a non-null `description` to the LLM, silently excluding Revenue/COGS whenever they had no variance note, so the model had no real figure to work from.
-  - Even with complete data, Operating Profit (Incl GA) requires a cross-department, gross-profit-weighted GA allocation — multi-step arithmetic LLMs aren't reliable at.  
+  - Even with complete data, Operating Profit (Incl GA) requires a cross-department, gross-profit-weighted GA allocation. This is a multi-step arithmetic LLMs aren't reliable at.  
 
-- Fix: The SQL query was corrected to include all line items regardless of `description`, and — more importantly — the true, DAX-verified Operating Profit (Incl GA) actual/budget figures are now injected directly into the SQL result via `UNION ALL` as a labeled row, with the prompt explicitly instructed to use only that row's numbers, not calculate its own. The LLM's role is scoped to language: turning verified numbers and ERP notes into narrative, never arithmetic. Every figure in the AI summaries traces back to a source-of-truth calculation in SQL or DAX.    
-- Prompt formatting consistency: Placing `{data}` mid-instructions caused the model to occasionally drop earlier formatting rules (fixed by moving all instructions before `{data}`), and a vague "describe unusually large percentages qualitatively" rule caused the model to over-apply it — replaced with an explicit 500% threshold and a worked example.  
+- Fix: The SQL query was corrected to include all line items regardless of `description`. Importantly, DAX-verified Operating Profit (Incl GA) actual/budget figures are now injected directly into the SQL result via `UNION ALL` as a labeled row, with the prompt explicitly instructed to use only that row's numbers, not calculate its own. The LLM's role is scoped to language: turning verified numbers and ERP notes into narrative, never arithmetic. Every figure in the AI summaries traces back to a source-of-truth calculation in SQL or DAX.    
+- Prompt formatting consistency: Placing `{data}` mid-instructions caused the model to occasionally drop earlier formatting rules (fixed by moving all instructions before `{data}`), and a vague "describe unusually large percentages qualitatively" rule caused the model to over-apply it which replaced with an explicit 500% threshold and a worked example.  
 
 <br>
 <br>
